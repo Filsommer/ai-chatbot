@@ -39,6 +39,7 @@ export class ChatSDKError extends Error {
   public statusCode: number;
 
   constructor(errorCode: ErrorCode, cause?: string) {
+    console.log('errorCode', errorCode, cause);
     super();
 
     const [type, surface] = errorCode.split(':');

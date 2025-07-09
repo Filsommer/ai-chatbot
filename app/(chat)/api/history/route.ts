@@ -1,4 +1,4 @@
-import { auth } from '@/app/(auth)/auth';
+import { getSession } from '@/lib/auth/server';
 import type { NextRequest } from 'next/server';
 import { getChatsByUserId } from '@/lib/db/queries';
 import { ChatSDKError } from '@/lib/errors';
@@ -17,10 +17,18 @@ export async function GET(request: NextRequest) {
     ).toResponse();
   }
 
-  const session = await auth();
+  const session = await getSession();
 
   if (!session?.user) {
     return new ChatSDKError('unauthorized:chat').toResponse();
+  }
+
+  // For guest users (anonymous), return empty chat history
+  if (!session.user.id) {
+    return Response.json({
+      chats: [],
+      hasMore: false,
+    });
   }
 
   const chats = await getChatsByUserId({

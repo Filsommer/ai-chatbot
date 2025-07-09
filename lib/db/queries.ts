@@ -38,6 +38,10 @@ import { ChatSDKError } from '../errors';
 // use the Drizzle adapter for Auth.js / NextAuth
 // https://authjs.dev/reference/adapter/drizzle
 
+// Load environment variables explicitly
+import { config } from 'dotenv';
+config({ path: '.env.local' });
+
 // biome-ignore lint: Forbidden non-null assertion.
 const client = postgres(process.env.POSTGRES_URL!);
 const db = drizzle(client);
@@ -76,6 +80,60 @@ export async function createGuestUser() {
     throw new ChatSDKError(
       'bad_request:database',
       'Failed to create guest user',
+    );
+  }
+}
+
+export async function createUserFromSupabase(
+  supabaseId: string,
+  email: string,
+) {
+  try {
+    return await db
+      .insert(user)
+      .values({
+        email,
+        supabaseId,
+      })
+      .returning({
+        id: user.id,
+        email: user.email,
+        supabaseId: user.supabaseId,
+      });
+  } catch (error) {
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to create user from Supabase',
+    );
+  }
+}
+
+export async function getUserBySupabaseId(supabaseId: string) {
+  try {
+    return await db.select().from(user).where(eq(user.supabaseId, supabaseId));
+  } catch (error) {
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to get user by Supabase ID',
+    );
+  }
+}
+
+export async function updateUserSupabaseId(email: string, supabaseId: string) {
+  try {
+    return await db
+      .update(user)
+      .set({ supabaseId })
+      .where(eq(user.email, email))
+      .returning({
+        id: user.id,
+        email: user.email,
+        supabaseId: user.supabaseId,
+      });
+  } catch (error) {
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to update user Supabase ID',
     );
   }
 }

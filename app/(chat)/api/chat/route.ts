@@ -6,7 +6,7 @@ import {
   stepCountIs,
   streamText,
 } from 'ai';
-import { auth, type UserType } from '@/app/(auth)/auth';
+import { getSession, type UserType } from '@/lib/auth/server';
 import { type RequestHints, systemPrompt } from '@/lib/ai/prompts';
 import {
   createStreamId,
@@ -68,6 +68,7 @@ export async function POST(request: Request) {
   try {
     const json = await request.json();
     requestBody = postRequestBodySchema.parse(json);
+    console.log('requestBody', requestBody);
   } catch (_) {
     return new ChatSDKError('bad_request:api').toResponse();
   }
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
       selectedVisibilityType: VisibilityType;
     } = requestBody;
 
-    const session = await auth();
+    const session = await getSession();
 
     if (!session?.user) {
       return new ChatSDKError('unauthorized:chat').toResponse();
@@ -93,35 +94,48 @@ export async function POST(request: Request) {
 
     const userType: UserType = session.user.type;
 
-    const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
-      differenceInHours: 24,
-    });
-
-    if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
-      return new ChatSDKError('rate_limit:chat').toResponse();
-    }
-
-    const chat = await getChatById({ id });
-
-    if (!chat) {
-      const title = await generateTitleFromUserMessage({
-        message,
+    // For guest users, skip rate limiting based on database records
+    if (session.user.type === 'regular') {
+      const messageCount = await getMessageCountByUserId({
+        id: session.user.id,
+        differenceInHours: 24,
       });
 
-      await saveChat({
-        id,
-        userId: session.user.id,
-        title,
-        visibility: selectedVisibilityType,
-      });
-    } else {
-      if (chat.userId !== session.user.id) {
-        return new ChatSDKError('forbidden:chat').toResponse();
+      if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
+        return new ChatSDKError('rate_limit:chat').toResponse();
       }
     }
 
-    const messagesFromDb = await getMessagesByChatId({ id });
+    // For guest users, skip database chat lookup
+    if (session.user.type === 'regular') {
+      const chat = await getChatById({ id });
+
+      if (!chat) {
+        const title = await generateTitleFromUserMessage({
+          message,
+        });
+
+        await saveChat({
+          id,
+          userId: session.user.id,
+          title,
+          visibility: selectedVisibilityType,
+        });
+      } else {
+        if (chat.userId !== session.user.id) {
+          return new ChatSDKError('forbidden:chat').toResponse();
+        }
+      }
+    } else {
+      // For guest users, just generate a title without saving
+      await generateTitleFromUserMessage({
+        message,
+      });
+    }
+
+    // For guest users, start with empty message history
+    const messagesFromDb =
+      session.user.type === 'regular' ? await getMessagesByChatId({ id }) : [];
     const uiMessages = [...convertToUIMessages(messagesFromDb), message];
 
     const { longitude, latitude, city, country } = geolocation(request);
@@ -133,21 +147,27 @@ export async function POST(request: Request) {
       country,
     };
 
-    await saveMessages({
-      messages: [
-        {
-          chatId: id,
-          id: message.id,
-          role: 'user',
-          parts: message.parts,
-          attachments: [],
-          createdAt: new Date(),
-        },
-      ],
-    });
+    // Only save messages for regular users
+    if (session.user.type === 'regular') {
+      await saveMessages({
+        messages: [
+          {
+            chatId: id,
+            id: message.id,
+            role: 'user',
+            parts: message.parts,
+            attachments: [],
+            createdAt: new Date(),
+          },
+        ],
+      });
+    }
 
     const streamId = generateUUID();
-    await createStreamId({ streamId, chatId: id });
+    // Only create stream ID in database for regular users
+    if (session.user.type === 'regular') {
+      await createStreamId({ streamId, chatId: id });
+    }
 
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
@@ -191,16 +211,19 @@ export async function POST(request: Request) {
       },
       generateId: generateUUID,
       onFinish: async ({ messages }) => {
-        await saveMessages({
-          messages: messages.map((message) => ({
-            id: message.id,
-            role: message.role,
-            parts: message.parts,
-            createdAt: new Date(),
-            attachments: [],
-            chatId: id,
-          })),
-        });
+        // Only save messages for regular users
+        if (session.user.type === 'regular') {
+          await saveMessages({
+            messages: messages.map((message) => ({
+              id: message.id,
+              role: message.role,
+              parts: message.parts,
+              createdAt: new Date(),
+              attachments: [],
+              chatId: id,
+            })),
+          });
+        }
       },
       onError: () => {
         return 'Oops, an error occurred!';
@@ -233,19 +256,22 @@ export async function DELETE(request: Request) {
     return new ChatSDKError('bad_request:api').toResponse();
   }
 
-  const session = await auth();
+  const session = await getSession();
 
   if (!session?.user) {
     return new ChatSDKError('unauthorized:chat').toResponse();
   }
 
-  const chat = await getChatById({ id });
+  // For guest users, allow deletion without database checks
+  if (session.user.type === 'regular') {
+    const chat = await getChatById({ id });
 
-  if (chat.userId !== session.user.id) {
-    return new ChatSDKError('forbidden:chat').toResponse();
+    if (chat.userId !== session.user.id) {
+      return new ChatSDKError('forbidden:chat').toResponse();
+    }
+
+    await deleteChatById({ id });
   }
 
-  const deletedChat = await deleteChatById({ id });
-
-  return Response.json(deletedChat, { status: 200 });
+  return Response.json({ success: true }, { status: 200 });
 }
