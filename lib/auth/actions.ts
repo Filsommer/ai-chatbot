@@ -1,15 +1,15 @@
-'use server';
+"use server";
 
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
-import { z } from 'zod';
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { z } from "zod";
 import {
   createUser,
   getUser,
   createUserFromSupabase,
   getUserBySupabaseId,
   updateUserSupabaseId,
-} from '@/lib/db/queries';
+} from "@/lib/db/queries";
 
 const authFormSchema = z.object({
   email: z.string().email(),
@@ -17,48 +17,35 @@ const authFormSchema = z.object({
 });
 
 export interface LoginActionState {
-  status:
-    | 'idle'
-    | 'in_progress'
-    | 'success'
-    | 'failed'
-    | 'invalid_data'
-    | 'migration_needed';
+  status: "idle" | "in_progress" | "success" | "failed" | "invalid_data" | "migration_needed";
   message?: string;
 }
 
-export async function login(
-  _: LoginActionState,
-  formData: FormData,
-): Promise<LoginActionState> {
+export async function login(_: LoginActionState, formData: FormData): Promise<LoginActionState> {
   try {
     const validatedData = authFormSchema.parse({
-      email: formData.get('email'),
-      password: formData.get('password'),
+      email: formData.get("email"),
+      password: formData.get("password"),
     });
 
-    console.log('Attempting login for:', validatedData.email);
+    console.log("Attempting login for:", validatedData.email);
 
     // First, check if user exists in our database
     const [existingUser] = await getUser(validatedData.email);
     console.log(
-      'User in database:',
-      existingUser ? 'Found' : 'Not found',
-      existingUser?.supabaseId ? 'with supabaseId' : 'without supabaseId',
+      "User in database:",
+      existingUser ? "Found" : "Not found",
+      existingUser?.supabaseId ? "with supabaseId" : "without supabaseId"
     );
 
     const supabase = await createClient();
 
     // Check if Supabase is configured
-    if (
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    ) {
-      console.error('Supabase environment variables not configured');
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error("Supabase environment variables not configured");
       return {
-        status: 'failed',
-        message:
-          'Authentication service not configured. Please check environment variables.',
+        status: "failed",
+        message: "Authentication service not configured. Please check environment variables.",
       };
     }
 
@@ -68,22 +55,22 @@ export async function login(
     });
 
     if (error) {
-      console.error('Supabase auth error:', error.message);
-      console.error('Error code:', error.status);
+      console.error("Supabase auth error:", error.message);
+      console.error("Error code:", error.status);
 
       // If user doesn't exist in Supabase, check if they need migration
-      if (error.message.includes('Invalid login credentials')) {
+      if (error.message.includes("Invalid login credentials")) {
         if (existingUser && !existingUser.supabaseId) {
-          console.log('User needs migration');
+          console.log("User needs migration");
           return {
-            status: 'migration_needed',
+            status: "migration_needed",
             message:
-              'This account exists from before our system migration. Please register again with the same email and a new password to migrate your account.',
+              "This account exists from before our system migration. Please register again with the same email and a new password to migrate your account.",
           };
         }
       }
 
-      return { status: 'failed', message: error.message };
+      return { status: "failed", message: error.message };
     }
 
     // Ensure user exists in our database with proper supabaseId mapping
@@ -104,40 +91,34 @@ export async function login(
       }
     }
 
-    return { status: 'success' };
+    return { status: "success" };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { status: 'invalid_data' };
+      return { status: "invalid_data" };
     }
 
-    return { status: 'failed' };
+    return { status: "failed" };
   }
 }
 
 export interface RegisterActionState {
-  status:
-    | 'idle'
-    | 'in_progress'
-    | 'success'
-    | 'failed'
-    | 'user_exists'
-    | 'invalid_data';
+  status: "idle" | "in_progress" | "success" | "failed" | "user_exists" | "invalid_data";
 }
 
 export async function register(
   _: RegisterActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<RegisterActionState> {
   try {
     const validatedData = authFormSchema.parse({
-      email: formData.get('email'),
-      password: formData.get('password'),
+      email: formData.get("email"),
+      password: formData.get("password"),
     });
 
     // Check if user already exists in our database
     const [existingUser] = await getUser(validatedData.email);
     if (existingUser && existingUser.supabaseId) {
-      return { status: 'user_exists' };
+      return { status: "user_exists" };
     }
 
     const supabase = await createClient();
@@ -148,7 +129,7 @@ export async function register(
     });
 
     if (error) {
-      return { status: 'failed' };
+      return { status: "failed" };
     }
 
     if (data.user && !data.user.is_anonymous) {
@@ -164,20 +145,19 @@ export async function register(
       }
     }
 
-    return { status: 'success' };
+    return { status: "success" };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { status: 'invalid_data' };
+      return { status: "invalid_data" };
     }
 
-    return { status: 'failed' };
+    return { status: "failed" };
   }
 }
 
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect('/login');
 }
 
 export async function signInAsGuest() {

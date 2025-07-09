@@ -1,12 +1,12 @@
-import { cookies } from 'next/headers';
-import { notFound, redirect } from 'next/navigation';
+import { cookies } from "next/headers";
+import { notFound, redirect } from "next/navigation";
 
-import { getSession } from '@/lib/auth/server';
-import { Chat } from '@/components/chat';
-import { getChatById, getMessagesByChatId } from '@/lib/db/queries';
-import { DataStreamHandler } from '@/components/data-stream-handler';
-import { DEFAULT_CHAT_MODEL } from '@/lib/ai/models';
-import { convertToUIMessages } from '@/lib/utils';
+import { getSession } from "@/lib/auth/server";
+import { Chat } from "@/components/chat";
+import { getChatById, getMessagesByChatId } from "@/lib/db/queries";
+import { DataStreamHandler } from "@/components/data-stream-handler";
+import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
+import { convertToUIMessages } from "@/lib/utils";
 
 export default async function Page(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -14,16 +14,16 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   const chat = await getChatById({ id });
 
   if (!chat) {
-    notFound();
+    redirect("/");
   }
 
   const session = await getSession();
 
   if (!session) {
-    redirect('/auth/guest');
+    redirect("/auth/guest");
   }
 
-  if (chat.visibility === 'private') {
+  if (chat.visibility === "private") {
     if (!session.user) {
       return notFound();
     }
@@ -40,7 +40,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   const uiMessages = convertToUIMessages(messagesFromDb);
 
   const cookieStore = await cookies();
-  const chatModelFromCookie = cookieStore.get('chat-model');
+  const chatModelFromCookie = cookieStore.get("chat-model");
 
   if (!chatModelFromCookie) {
     return (

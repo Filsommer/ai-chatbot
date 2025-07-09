@@ -1,37 +1,24 @@
-'use client';
+"use client";
 
-import { Button } from './ui/button';
-import {
-  type Dispatch,
-  type SetStateAction,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
-import { Textarea } from './ui/textarea';
-import { deleteTrailingMessages } from '@/app/(chat)/actions';
-import type { UseChatHelpers } from '@ai-sdk/react';
-import type { ChatMessage } from '@/lib/types';
-import { getTextFromMessage } from '@/lib/utils';
+import { Button } from "./ui/button";
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
+import { Textarea } from "./ui/textarea";
+import { deleteTrailingMessages } from "@/app/(chat)/actions";
+import type { UseChatHelpers } from "@ai-sdk/react";
+import type { ChatMessage } from "@/lib/types";
+import { getTextFromMessage } from "@/lib/utils";
 
 export type MessageEditorProps = {
   message: ChatMessage;
-  setMode: Dispatch<SetStateAction<'view' | 'edit'>>;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  regenerate: UseChatHelpers<ChatMessage>['regenerate'];
+  setMode: Dispatch<SetStateAction<"view" | "edit">>;
+  setMessages: UseChatHelpers<ChatMessage>["setMessages"];
+  regenerate: UseChatHelpers<ChatMessage>["regenerate"];
 };
 
-export function MessageEditor({
-  message,
-  setMode,
-  setMessages,
-  regenerate,
-}: MessageEditorProps) {
+export function MessageEditor({ message, setMode, setMessages, regenerate }: MessageEditorProps) {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const [draftContent, setDraftContent] = useState<string>(
-    getTextFromMessage(message),
-  );
+  const [draftContent, setDraftContent] = useState<string>(getTextFromMessage(message));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -42,7 +29,7 @@ export function MessageEditor({
 
   const adjustHeight = () => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight + 2}px`;
     }
   };
@@ -67,7 +54,7 @@ export function MessageEditor({
           variant="outline"
           className="h-fit py-2 px-3"
           onClick={() => {
-            setMode('view');
+            setMode("view");
           }}
         >
           Cancel
@@ -90,7 +77,7 @@ export function MessageEditor({
               if (index !== -1) {
                 const updatedMessage: ChatMessage = {
                   ...message,
-                  parts: [{ type: 'text', text: draftContent }],
+                  parts: [{ type: "text", text: draftContent }],
                 };
 
                 return [...messages.slice(0, index), updatedMessage];
@@ -99,11 +86,11 @@ export function MessageEditor({
               return messages;
             });
 
-            setMode('view');
+            setMode("view");
             regenerate();
           }}
         >
-          {isSubmitting ? 'Sending...' : 'Send'}
+          {isSubmitting ? "Sending..." : "Send"}
         </Button>
       </div>
     </div>

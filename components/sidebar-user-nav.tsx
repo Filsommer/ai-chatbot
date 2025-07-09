@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { ChevronUp } from 'lucide-react';
-import Image from 'next/image';
-import { useAuth } from './auth-provider';
-import { useTheme } from 'next-themes';
+import { ChevronUp } from "lucide-react";
+import Image from "next/image";
+import { useAuth } from "./auth-provider";
+import { useTheme } from "next-themes";
 
 import {
   DropdownMenu,
@@ -11,15 +11,11 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from '@/components/ui/sidebar';
-import { useRouter } from 'next/navigation';
-import { toast } from './toast';
-import { LoaderIcon } from './icons';
+} from "@/components/ui/dropdown-menu";
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { useRouter } from "next/navigation";
+import { toast } from "./toast";
+import { LoaderIcon } from "./icons";
 
 export function SidebarUserNav() {
   const router = useRouter();
@@ -51,14 +47,14 @@ export function SidebarUserNav() {
                 className="data-[state=open]:bg-sidebar-accent bg-background data-[state=open]:text-sidebar-accent-foreground h-10"
               >
                 <Image
-                  src={`https://avatar.vercel.sh/${user.email || 'guest'}`}
-                  alt={user.email ?? 'User Avatar'}
+                  src={`https://avatar.vercel.sh/${user.email || "guest"}`}
+                  alt={user.email ?? "User Avatar"}
                   width={24}
                   height={24}
                   className="rounded-full"
                 />
                 <span data-testid="user-email" className="truncate">
-                  {isGuest ? 'Guest' : user?.email}
+                  {isGuest ? "Guest" : user?.email}
                 </span>
                 <ChevronUp className="ml-auto" />
               </SidebarMenuButton>
@@ -72,11 +68,9 @@ export function SidebarUserNav() {
             <DropdownMenuItem
               data-testid="user-nav-item-theme"
               className="cursor-pointer"
-              onSelect={() =>
-                setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
-              }
+              onSelect={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
             >
-              {`Toggle ${resolvedTheme === 'light' ? 'dark' : 'light'} mode`}
+              {`Toggle ${resolvedTheme === "light" ? "dark" : "light"} mode`}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild data-testid="user-nav-item-auth">
@@ -86,23 +80,22 @@ export function SidebarUserNav() {
                 onClick={async () => {
                   if (loading) {
                     toast({
-                      type: 'error',
-                      description:
-                        'Checking authentication status, please try again!',
+                      type: "error",
+                      description: "Checking authentication status, please try again!",
                     });
 
                     return;
                   }
 
                   if (isGuest) {
-                    router.push('/login');
+                    router.push("/login");
                   } else {
                     await signOut();
-                    router.push('/');
+                    window.location.reload();
                   }
                 }}
               >
-                {isGuest ? 'Login to your account' : 'Sign out'}
+                {isGuest ? "Login to your account" : "Sign out"}
               </button>
             </DropdownMenuItem>
           </DropdownMenuContent>
