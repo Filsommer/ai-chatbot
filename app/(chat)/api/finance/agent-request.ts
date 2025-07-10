@@ -629,7 +629,7 @@ export async function generateStreamFinalAgentResponse(
     ],
   });
 
-  return { textStream: result.textStream, finishPromise: undefined };
+  return { partialObjectStream: result.partialObjectStream, finishPromise: undefined };
 }
 
 export async function generateGoogleSearchAgentResponse(
