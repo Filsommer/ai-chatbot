@@ -43,6 +43,7 @@ export type CustomUIDataTypes = {
   chartData: string;
   tickers: string;
   followUpQuestions: string;
+  status: string;
 };
 
 export type ChatMessage = UIMessage<MessageMetadata, CustomUIDataTypes, ChatTools>;

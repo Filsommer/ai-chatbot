@@ -58,62 +58,87 @@ export function Chat({
     chatTitle?: string;
   }>({});
 
-  const { messages, setMessages, sendMessage, status, stop, regenerate, resumeStream } =
-    useChat<ChatMessage>({
-      id,
-      messages: initialMessages,
-      experimental_throttle: 100,
-      generateId: generateUUID,
-      transport: new DefaultChatTransport({
-        api: "/api/chat",
-        fetch: fetchWithErrorHandlers,
-        prepareSendMessagesRequest({ messages, id, body }) {
-          return {
-            body: {
-              id,
-              message: messages.at(-1),
-              selectedChatModel: initialChatModel,
-              selectedVisibilityType: visibilityType,
-              ...body,
-            },
-          };
-        },
-      }),
-      onData: (dataPart) => {
-        console.log("🎭 Frontend received data part:", dataPart);
-        console.log("🎭 Data part type:", dataPart.type);
-        setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+  // State for status messages
+  const [statusMessages, setStatusMessages] = useState<
+    Array<{ step: string; message: string; timestamp: number }>
+  >([]);
 
-        // Handle structured data from finance agent
-        if (dataPart.type === "data-chartData") {
-          const chartData = JSON.parse(dataPart.data);
-          console.log("📊 Received chart data:", chartData);
-          setFinanceData((prev) => ({ ...prev, chartData }));
-        } else if (dataPart.type === "data-tickers") {
-          const tickersToDisplay = JSON.parse(dataPart.data);
-          console.log("📈 Received tickers:", tickersToDisplay);
-          setFinanceData((prev) => ({ ...prev, tickersToDisplay }));
-        } else if (dataPart.type === "data-followUpQuestions") {
-          const followUpQuestions = JSON.parse(dataPart.data);
-          console.log("❓ Received follow-up questions:", followUpQuestions);
-          setFinanceData((prev) => ({ ...prev, followUpQuestions }));
-        }
+  const {
+    messages,
+    setMessages,
+    sendMessage: originalSendMessage,
+    status,
+    stop,
+    regenerate,
+    resumeStream,
+  } = useChat<ChatMessage>({
+    id,
+    messages: initialMessages,
+    experimental_throttle: 100,
+    generateId: generateUUID,
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      fetch: fetchWithErrorHandlers,
+      prepareSendMessagesRequest({ messages, id, body }) {
+        return {
+          body: {
+            id,
+            message: messages.at(-1),
+            selectedChatModel: initialChatModel,
+            selectedVisibilityType: visibilityType,
+            ...body,
+          },
+        };
       },
-      onFinish: () => {
-        console.log("🏁 Frontend stream finished");
-        console.log("📊 Final finance data:", financeData);
-        mutate(unstable_serialize(getChatHistoryPaginationKey));
-      },
-      onError: (error) => {
-        console.error("❌ Frontend stream error:", error);
-        if (error instanceof ChatSDKError) {
-          toast({
-            type: "error",
-            description: error.message,
-          });
-        }
-      },
-    });
+    }),
+    onData: (dataPart) => {
+      console.log("🎭 Frontend received data part:", dataPart);
+      console.log("🎭 Data part type:", dataPart.type);
+      setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+
+      // Handle structured data from finance agent
+      if (dataPart.type === "data-status") {
+        const statusData = JSON.parse(dataPart.data);
+        console.log("📊 Received status:", statusData);
+        setStatusMessages((prev) => [...prev, { ...statusData, timestamp: Date.now() }]);
+      } else if (dataPart.type === "data-chartData") {
+        const chartData = JSON.parse(dataPart.data);
+        console.log("📊 Received chart data:", chartData);
+        setFinanceData((prev) => ({ ...prev, chartData }));
+      } else if (dataPart.type === "data-tickers") {
+        const tickersToDisplay = JSON.parse(dataPart.data);
+        console.log("📈 Received tickers:", tickersToDisplay);
+        setFinanceData((prev) => ({ ...prev, tickersToDisplay }));
+      } else if (dataPart.type === "data-followUpQuestions") {
+        const followUpQuestions = JSON.parse(dataPart.data);
+        console.log("❓ Received follow-up questions:", followUpQuestions);
+        setFinanceData((prev) => ({ ...prev, followUpQuestions }));
+      }
+    },
+    onFinish: () => {
+      console.log("🏁 Frontend stream finished");
+      console.log("📊 Final finance data:", financeData);
+      // Clear status messages after completion
+      setTimeout(() => setStatusMessages([]), 3000);
+      mutate(unstable_serialize(getChatHistoryPaginationKey));
+    },
+    onError: (error) => {
+      console.error("❌ Frontend stream error:", error);
+      if (error instanceof ChatSDKError) {
+        toast({
+          type: "error",
+          description: error.message,
+        });
+      }
+    },
+  });
+
+  // Wrapper function to clear status messages before sending
+  const sendMessage = (message: any) => {
+    setStatusMessages([]);
+    setFinanceData({});
+    return originalSendMessage(message);
+  };
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
@@ -186,6 +211,51 @@ export function Chat({
           isArtifactVisible={isArtifactVisible}
         />
 
+        {/* Display status messages during processing */}
+        {statusMessages.length > 0 && status === "streaming" && (
+          <div className="mx-auto px-4 w-full md:max-w-3xl mb-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+              <h3 className="font-medium text-sm text-blue-700 dark:text-blue-300 mb-3 flex items-center">
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Processing your request...
+              </h3>
+              <div className="space-y-2">
+                {statusMessages.map((statusMsg, index) => (
+                  <div
+                    key={`${statusMsg.step}-${statusMsg.timestamp}`}
+                    className={`text-sm transition-all duration-300 ${
+                      index === statusMessages.length - 1
+                        ? "text-blue-700 dark:text-blue-300 font-medium"
+                        : "text-blue-600 dark:text-blue-400"
+                    }`}
+                  >
+                    {statusMsg.message}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Display finance data when available */}
         {((financeData.chartData?.length ?? 0) > 0 ||
           (financeData.tickersToDisplay?.length ?? 0) > 0 ||
@@ -238,7 +308,15 @@ export function Chat({
                   <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400 mb-2">
                     Follow-up Questions:
                   </h4>
-                  <div className="space-y-1">
+                  <button
+                    className="space-y-1 text-left"
+                    onClick={() => {
+                      sendMessage({
+                        role: "user" as const,
+                        parts: [{ type: "text", text: financeData.followUpQuestions[0] }],
+                      });
+                    }}
+                  >
                     {financeData.followUpQuestions.map((question: string, index: number) => (
                       <div
                         key={index}
@@ -247,7 +325,7 @@ export function Chat({
                         • {question}
                       </div>
                     ))}
-                  </div>
+                  </button>
                 </div>
               )}
             </div>

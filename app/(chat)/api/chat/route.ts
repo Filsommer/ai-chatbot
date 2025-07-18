@@ -199,212 +199,248 @@ export async function POST(request: Request) {
       input: getMessageText(message),
     });
 
-    const { object: classificationObject } = await generateObject({
-      model: google("gemini-2.5-flash"),
-      schema: classificationAgentSchema,
-      providerOptions: {
-        google: {
-          thinkingConfig: {
-            thinkingBudget: 0,
-          },
-        },
-      },
-      system: `You are a helpful financial assistant for eToro that classifies user queries into one or more of the following categories:
-      - isAboutUserPortfolio
-      - isAboutStockFundamentals
-      - isStockIndustryRelevant
-      - isAboutETFs
-      - isAboutCurrenciesOrCommoditiesOrIndices
-      - isAboutCrypto
-      - userWantsToTradeAnAsset
-      - isAboutNews
-      - isAboutEarningsDates
-      - isAboutDividendDates
-      - isAboutInvestors
-      - isAboutSmartPortfolios
-      - isAboutAssetPricesOrPerformance
-      - possibleAssetNamesOrTickers
-      - isAboutEarningsCallsSummariesOrRevenueSegmentation
-      - isAboutCorporateGuidanceOrStrategicOutlook
-      - isAboutImportantCEOs
-      - previousRelevantTickers
-    `,
-      prompt: `Classify this user query for:
-            0. previousRelevantTickers - If the user is asking something related to a ticker that was mentioned in the previous messages, add it to the previousRelevantTickers array.
-            1. isAboutUserPortfolio - If the user is asking about their own portfolio, or "my" portfolio/allocation/risk/assets/news, set isAboutUserPortfolio to true. Please ALWAYS check if this history includes a message where the user mentions their OWN portfolio, AND if the current prompt is clearly related to the user's portfolio. History: ${JSON.stringify(
-              uiMessages.slice(-4)
-            )}. - Example: "What are the assets in my portfolio?", or "Which investors would diversify my allocation?"
-            2. isAboutCurrenciesOrCommoditiesOrIndices - Example: "What are the best performing commodities?". Not relevant if question is specifically about an ETF.
-            3. isAboutCrypto - Example: "What are the best performing cryptocurrencies?" or "Can I trade Ethereum in eToro?"
-            4. isAboutStockFundamentals - 
-                Examples: - "What is AMD and NVDA P/E ratios?"
-                          - "Top 10 German stocks in Healthcare?" which implies a comparison of market caps of stocks.
-                          - "Which US defense stocks can I buy?" which implies looking for stocks from a specific industry or country.
-                          - "Most popular stocks" which implies looking for the most popular stocks in the etoro
-                          - "Highly rated stocks by analysts" which implies looking for stocks with high analyst ratings
-            5. isStockIndustryRelevant - Example: "Compare AMD to its competitors" or "Best stocks in John Deere's industry?" would return true.
-            4. isAboutETFs - Example: "What are the best performing ETFs?"
-            5. userWantsToTradeAnAsset - Example: "Which tech stocks can I trade?" Here you can use your common sense to find multiple popular tickers like TSLA, NVDA, AAPL, etc. 
-            6. possibleAssetNamesOrTickers - Example: "What are the main competitors of Mercedes?" - You need to use your knowledge of the market to add two possible asset names 'Mercedes' and 'Benz' and 'MBG.DE' to the array. Try to be smart about typos. E.g. Palentir is most likely the asset name "Palantir". And e.g. Google should be 'Google' and 'GOOG' and 'Alphabet' and 'GOOGL'. And e.g. Amazon should be 'Amazon' and 'AMZN'.
-            7. isAboutNews - Example: "What are the latest news on TSLA?" or "What are the latest news about real estate?" or "Why is ETOR moving?" or "Why has OIL gone up?"
-            8. isAboutEarningsDates - Example: "What are the next earnings dates for TSLA?" or "What are the latest earnings reports for AAPL?" or "What was Google's revenue over the last 4 quarters?" Give this precedence over isAboutNews.
-            9. isAboutDividendDates - Example: "What are the next dividends for TSLA?" or "How much dividend did mercedes pay last time?" Give this precedence over isAboutNews.
-            10. isAboutInvestors - If the user is asking about investors and/or provides a username, it's most likely about popular investors - Example: "How can I copy JeppeKirkBonde's portfolio?" or "Show me some investors to copy" or "What are the top 10 PIs?" 
-            11. isAboutSmartPortfolios - If the user is asking about SmartPortfolios specifically - Example: "What are the most popular SmartPortfolios?"
-            12. isAboutAssetPricesOrPerformance - Exclusive to assets, irrelevant for investors. Example: "How is Tesla performing today?" or "What are the top performing finance stocks this year?". Only relevant for questions specifically about price or price performance, and not about reasons for why the price is moving or moved in the past.
-            13. isAboutEarningsCallsSummariesOrRevenueSegmentation - Example: "What was Apple's iPhone revenue over the last two years?"
-            14. isAboutCorporateGuidanceOrStrategicOutlook - Example: "What's Meta's latest financial guidance?" or "Why has Snowflake Inc. Net Revenue Retention Rate been decreasing?" or "Write me a slide deck outline for ASML."
-            15. isAboutImportantCEOs - Example: "Who are the most important CEOs?" or "What did Elon Musk say about the future of Tesla?" or "Who is Yoni Assia, eToro's CEO?"
-            
-            Keep in mind that eToro is a social trading platform (e.g. "Biggest traders on eToro"), but also a publicly traded company with the ticker 'ETOR', which by itself has financial data (e.g. "What is the price and market cap of eToro?" and if user specifies the ETOR ticker).
-            
-            Query: ${getMessageText(message)}
-            `,
-    });
-
-    const {
-      isAboutEarningsCallsSummariesOrRevenueSegmentation,
-      isAboutImportantCEOs,
-      isAboutUserPortfolio,
-      userWantsToTradeAnAsset,
-      isAboutCorporateGuidanceOrStrategicOutlook,
-      isAboutCrypto,
-      isAboutCurrenciesOrCommoditiesOrIndices,
-      isAboutInvestors,
-      isAboutSmartPortfolios,
-      isAboutAssetPricesOrPerformance,
-      isAboutNews,
-      isAboutEarningsDates,
-    } = classificationObject;
-
-    // Debug: Log classification results
-    console.log("🏷️ Classification results:", {
-      isAboutNews,
-      isAboutEarningsCallsSummariesOrRevenueSegmentation,
-      isAboutImportantCEOs,
-      isAboutCorporateGuidanceOrStrategicOutlook,
-      possibleAssetNamesOrTickers: classificationObject.possibleAssetNamesOrTickers,
-    });
-
-    let portfolioData: PortfolioPosition[] = [];
-    if (isAboutUserPortfolio) {
-      portfolioData = await getUserPortfolio("FilipeSommer");
-    }
-
-    // 2nd agent (SQL agent): Extract relevant tickers
-    const mainTickerMatches = await generateTickersExtractionQueriesResponse(
-      classificationObject,
-      true
-    );
-
-    const [portfolioAnalysis, queryResults, googleSearchResult, additionalData] = await Promise.all(
-      [
-        // Only run portfolio analysis if it's about user portfolio
-        isAboutUserPortfolio
-          ? generatePortfolioAnalysisResponse(
-              langsheetTrace!,
-              classificationObject,
-              getMessageText(message),
-              uiMessages.slice(-4) as any,
-              portfolioData,
-              undefined
-            )
-          : Promise.resolve(null),
-
-        // SQL agent response
-        generateSQLAgentResponse(
-          langsheetTrace!,
-          classificationObject,
-          getMessageText(message),
-          mainTickerMatches,
-          [],
-          uiMessages.slice(-4) as any,
-          portfolioData,
-          undefined
-        ),
-
-        // Google Search agent response (conditional)
-        isAboutEarningsCallsSummariesOrRevenueSegmentation ||
-        isAboutImportantCEOs ||
-        isAboutNews ||
-        isAboutEarningsDates ||
-        isAboutCorporateGuidanceOrStrategicOutlook ||
-        ((isAboutCrypto || isAboutCurrenciesOrCommoditiesOrIndices) &&
-          !isAboutUserPortfolio &&
-          !isAboutInvestors)
-          ? generateGoogleSearchAgentResponse(
-              langsheetTrace!,
-              getMessageText(message),
-              wantsLogs,
-              uiMessages.slice(-4) as any,
-              portfolioData,
-              undefined
-            )
-          : Promise.resolve(null),
-
-        isAboutAssetPricesOrPerformance
-          ? await getAdditionalDataResponse(
-              langsheetTrace!,
-              getMessageText(message),
-              wantsLogs,
-              uiMessages.slice(-4) as any,
-              portfolioData,
-              mainTickerMatches,
-              undefined
-            )
-          : Promise.resolve(null),
-      ]
-    );
-
-    // Extract all SQL queries from the results and remove the dangerous ones
-    const allQueries = queryResults
-      .filter((result) => result !== false)
-      .map((result: any) => ({
-        sqlQuery: result.object.sqlQuery,
-        reasoning: result.object.reasoning,
-        stepName: result.object.stepName,
-      }));
-
-    // 2nd agent (SQL agent): Run all safe queries in parallel and combine results
-    let comparisonData = await generateComparisonDataSqlQueriesResponse(
-      langsheetTrace!,
-      allQueries,
-      undefined
-    );
-
-    if (!comparisonData || comparisonData.length === 0) {
-      comparisonData = [...comparisonData, ...mainTickerMatches];
-    }
-
-    // Final stream
-    console.log("🚀 Creating UI message stream...");
-    console.log("📊 Comparison data:", JSON.stringify(comparisonData, null, 2));
-    console.log("🔍 Google search result:", googleSearchResult ? "Present" : "None");
-    if (googleSearchResult) {
-      console.log(
-        "🔍 Google search content preview:",
-        googleSearchResult.substring(0, 200) + "..."
-      );
-    }
-    console.log("💼 Portfolio data length:", portfolioData.length);
-
-    // Debug: Check if we should trigger Google Search
-    const shouldTriggerGoogleSearch =
-      isAboutEarningsCallsSummariesOrRevenueSegmentation ||
-      isAboutImportantCEOs ||
-      isAboutNews ||
-      isAboutEarningsDates ||
-      isAboutCorporateGuidanceOrStrategicOutlook ||
-      ((isAboutCrypto || isAboutCurrenciesOrCommoditiesOrIndices) &&
-        !isAboutUserPortfolio &&
-        !isAboutInvestors);
-    console.log("🔍 Should trigger Google Search:", shouldTriggerGoogleSearch);
-
     const stream = createUIMessageStream({
       execute: async ({ writer: dataStream }) => {
         console.log("📝 Stream execute function called");
 
         try {
+          // Step 1: Classification
+          dataStream.write({
+            type: "data-status",
+            data: JSON.stringify({
+              step: "classification",
+              message: "🏷️ Analyzing your question...",
+            }),
+          });
+
+          const { object: classificationObject } = await generateObject({
+            model: google("gemini-2.5-flash"),
+            schema: classificationAgentSchema,
+            providerOptions: {
+              google: {
+                thinkingConfig: {
+                  thinkingBudget: 0,
+                },
+              },
+            },
+            system: `You are a helpful financial assistant for eToro that classifies user queries into one or more of the following categories:
+              - isAboutUserPortfolio
+              - isAboutStockFundamentals
+              - isStockIndustryRelevant
+              - isAboutETFs
+              - isAboutCurrenciesOrCommoditiesOrIndices
+              - isAboutCrypto
+              - userWantsToTradeAnAsset
+              - isAboutNews
+              - isAboutEarningsDates
+              - isAboutDividendDates
+              - isAboutInvestors
+              - isAboutSmartPortfolios
+              - isAboutAssetPricesOrPerformance
+              - possibleAssetNamesOrTickers
+              - isAboutEarningsCallsSummariesOrRevenueSegmentation
+              - isAboutCorporateGuidanceOrStrategicOutlook
+              - isAboutImportantCEOs
+              - previousRelevantTickers
+            `,
+            prompt: `Classify this user query for:
+                      0. previousRelevantTickers - If the user is asking something related to a ticker that was mentioned in the previous messages, add it to the previousRelevantTickers array.
+                      1. isAboutUserPortfolio - If the user is asking about their own portfolio, or "my" portfolio/allocation/risk/assets/news, set isAboutUserPortfolio to true. Please ALWAYS check if this history includes a message where the user mentions their OWN portfolio, AND if the current prompt is clearly related to the user's portfolio. History: ${JSON.stringify(
+                        uiMessages.slice(-4)
+                      )}. - Example: "What are the assets in my portfolio?", or "Which investors would diversify my allocation?"
+                      2. isAboutCurrenciesOrCommoditiesOrIndices - Example: "What are the best performing commodities?". Not relevant if question is specifically about an ETF.
+                      3. isAboutCrypto - Example: "What are the best performing cryptocurrencies?" or "Can I trade Ethereum in eToro?"
+                      4. isAboutStockFundamentals - 
+                          Examples: - "What is AMD and NVDA P/E ratios?"
+                                    - "Top 10 German stocks in Healthcare?" which implies a comparison of market caps of stocks.
+                                    - "Which US defense stocks can I buy?" which implies looking for stocks from a specific industry or country.
+                                    - "Most popular stocks" which implies looking for the most popular stocks in the etoro
+                                    - "Highly rated stocks by analysts" which implies looking for stocks with high analyst ratings
+                      5. isStockIndustryRelevant - Example: "Compare AMD to its competitors" or "Best stocks in John Deere's industry?" would return true.
+                      4. isAboutETFs - Example: "What are the best performing ETFs?"
+                      5. userWantsToTradeAnAsset - Example: "Which tech stocks can I trade?" Here you can use your common sense to find multiple popular tickers like TSLA, NVDA, AAPL, etc. 
+                      6. possibleAssetNamesOrTickers - Example: "What are the main competitors of Mercedes?" - You need to use your knowledge of the market to add two possible asset names 'Mercedes' and 'Benz' and 'MBG.DE' to the array. Try to be smart about typos. E.g. Palentir is most likely the asset name "Palantir". And e.g. Google should be 'Google' and 'GOOG' and 'Alphabet' and 'GOOGL'. And e.g. Amazon should be 'Amazon' and 'AMZN'.
+                      7. isAboutNews - Example: "What are the latest news on TSLA?" or "What are the latest news about real estate?" or "Why is ETOR moving?" or "Why has OIL gone up?"
+                      8. isAboutEarningsDates - Example: "What are the next earnings dates for TSLA?" or "What are the latest earnings reports for AAPL?" or "What was Google's revenue over the last 4 quarters?" Give this precedence over isAboutNews.
+                      9. isAboutDividendDates - Example: "What are the next dividends for TSLA?" or "How much dividend did mercedes pay last time?" Give this precedence over isAboutNews.
+                      10. isAboutInvestors - If the user is asking about investors and/or provides a username, it's most likely about popular investors - Example: "How can I copy JeppeKirkBonde's portfolio?" or "Show me some investors to copy" or "What are the top 10 PIs?" 
+                      11. isAboutSmartPortfolios - If the user is asking about SmartPortfolios specifically - Example: "What are the most popular SmartPortfolios?"
+                      12. isAboutAssetPricesOrPerformance - Exclusive to assets, irrelevant for investors. Example: "How is Tesla performing today?" or "What are the top performing finance stocks this year?". Only relevant for questions specifically about price or price performance, and not about reasons for why the price is moving or moved in the past.
+                      13. isAboutEarningsCallsSummariesOrRevenueSegmentation - Example: "What was Apple's iPhone revenue over the last two years?"
+                      14. isAboutCorporateGuidanceOrStrategicOutlook - Example: "What's Meta's latest financial guidance?" or "Why has Snowflake Inc. Net Revenue Retention Rate been decreasing?" or "Write me a slide deck outline for ASML."
+                      15. isAboutImportantCEOs - Example: "Who are the most important CEOs?" or "What did Elon Musk say about the future of Tesla?" or "Who is Yoni Assia, eToro's CEO?"
+                      
+                      Keep in mind that eToro is a social trading platform (e.g. "Biggest traders on eToro"), but also a publicly traded company with the ticker 'ETOR', which by itself has financial data (e.g. "What is the price and market cap of eToro?" and if user specifies the ETOR ticker).
+                      
+                      Query: ${getMessageText(message)}
+                      `,
+          });
+
+          const {
+            isAboutEarningsCallsSummariesOrRevenueSegmentation,
+            isAboutImportantCEOs,
+            isAboutUserPortfolio,
+            userWantsToTradeAnAsset,
+            isAboutCorporateGuidanceOrStrategicOutlook,
+            isAboutCrypto,
+            isAboutCurrenciesOrCommoditiesOrIndices,
+            isAboutInvestors,
+            isAboutSmartPortfolios,
+            isAboutAssetPricesOrPerformance,
+            isAboutNews,
+            isAboutEarningsDates,
+          } = classificationObject;
+
+          dataStream.write({
+            type: "data-status",
+            data: JSON.stringify({
+              step: "classification-complete",
+              message: "✅ Question analysis complete",
+            }),
+          });
+
+          // Step 2: Portfolio data if needed
+          let portfolioData: PortfolioPosition[] = [];
+          if (isAboutUserPortfolio) {
+            portfolioData = await getUserPortfolio("FilipeSommer");
+          }
+
+          // Step 3: Ticker extraction
+          dataStream.write({
+            type: "data-status",
+            data: JSON.stringify({
+              step: "ticker-extraction",
+              message: "🔍 Extracting relevant tickers...",
+            }),
+          });
+
+          const mainTickerMatches = await generateTickersExtractionQueriesResponse(
+            classificationObject,
+            true
+          );
+
+          dataStream.write({
+            type: "data-status",
+            data: JSON.stringify({
+              step: "ticker-extraction-complete",
+              message: "✅ Ticker extraction complete",
+            }),
+          });
+
+          // Step 4: Data fetching
+          dataStream.write({
+            type: "data-status",
+            data: JSON.stringify({
+              step: "data-fetching",
+              message: "📊 Fetching financial data...",
+            }),
+          });
+
+          const [portfolioAnalysis, queryResults, googleSearchResult, additionalData] =
+            await Promise.all([
+              // Only run portfolio analysis if it's about user portfolio
+              isAboutUserPortfolio
+                ? generatePortfolioAnalysisResponse(
+                    langsheetTrace!,
+                    classificationObject,
+                    getMessageText(message),
+                    uiMessages.slice(-4) as any,
+                    portfolioData,
+                    undefined
+                  )
+                : Promise.resolve(null),
+
+              // SQL agent response
+              generateSQLAgentResponse(
+                langsheetTrace!,
+                classificationObject,
+                getMessageText(message),
+                mainTickerMatches,
+                [],
+                uiMessages.slice(-4) as any,
+                portfolioData,
+                undefined
+              ),
+
+              // Google Search agent response (conditional)
+              isAboutEarningsCallsSummariesOrRevenueSegmentation ||
+              isAboutImportantCEOs ||
+              isAboutNews ||
+              isAboutEarningsDates ||
+              isAboutCorporateGuidanceOrStrategicOutlook ||
+              ((isAboutCrypto || isAboutCurrenciesOrCommoditiesOrIndices) &&
+                !isAboutUserPortfolio &&
+                !isAboutInvestors)
+                ? generateGoogleSearchAgentResponse(
+                    langsheetTrace!,
+                    getMessageText(message),
+                    wantsLogs,
+                    uiMessages.slice(-4) as any,
+                    portfolioData,
+                    undefined
+                  )
+                : Promise.resolve(null),
+
+              isAboutAssetPricesOrPerformance
+                ? await getAdditionalDataResponse(
+                    langsheetTrace!,
+                    getMessageText(message),
+                    wantsLogs,
+                    uiMessages.slice(-4) as any,
+                    portfolioData,
+                    mainTickerMatches,
+                    undefined
+                  )
+                : Promise.resolve(null),
+            ]);
+
+          // Extract all SQL queries from the results and remove the dangerous ones
+          const allQueries = queryResults
+            .filter((result) => result !== false)
+            .map((result: any) => ({
+              sqlQuery: result.object.sqlQuery,
+              reasoning: result.object.reasoning,
+              stepName: result.object.stepName,
+            }));
+
+          // 2nd agent (SQL agent): Run all safe queries in parallel and combine results
+          let comparisonData = await generateComparisonDataSqlQueriesResponse(
+            langsheetTrace!,
+            allQueries,
+            undefined
+          );
+
+          if (!comparisonData || comparisonData.length === 0) {
+            comparisonData = [...comparisonData, ...mainTickerMatches];
+          }
+
+          if (googleSearchResult) {
+            dataStream.write({
+              type: "data-status",
+              data: JSON.stringify({
+                step: "google-search-complete",
+                message: "✅ Latest news gathered",
+              }),
+            });
+          }
+
+          dataStream.write({
+            type: "data-status",
+            data: JSON.stringify({
+              step: "data-fetching-complete",
+              message: "✅ Financial data retrieved",
+            }),
+          });
+
+          // Step 5: Generate response
+          dataStream.write({
+            type: "data-status",
+            data: JSON.stringify({
+              step: "generating-response",
+              message: "🤖 Generating your response...",
+            }),
+          });
+
           // Get the finance agent's streamObject result
           console.log("🤖 Calling generateStreamFinalAgentResponse with:", {
             prompt: getMessageText(message),
@@ -495,6 +531,15 @@ export async function POST(request: Request) {
               id: messageId,
             });
           }
+
+          // Send completion status
+          dataStream.write({
+            type: "data-status",
+            data: JSON.stringify({
+              step: "complete",
+              message: "✅ Response generated successfully!",
+            }),
+          });
 
           console.log("✅ PartialObjectStream complete");
           console.log("📊 Final structured data:", JSON.stringify(lastStructuredData, null, 2));
